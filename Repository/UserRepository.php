@@ -27,15 +27,16 @@ final class UserRepository
         return $row ?: null;
     }
 
-    // Tambah user (PASSWORD DI-HASH / ANEH)
+    // Tambah user (password di-hash)
     public function insert(string $username, string $plainPassword, string $role): int
     {
         $role = strtoupper(trim($role));
-        if (!in_array($role, ['ADMIN', 'USER'], true)) {
+
+        // Terima role ADMIN atau CASHIER
+        if (!in_array($role, ['ADMIN', 'CASHIER'], true)) {
             throw new InvalidArgumentException('Role tidak valid');
         }
 
-        // 🔐 HASH PASSWORD
         $hashPassword = password_hash($plainPassword, PASSWORD_DEFAULT);
 
         $sql = "INSERT INTO users (username, password, role)
@@ -50,7 +51,7 @@ final class UserRepository
         return (int)$this->pdo->lastInsertId();
     }
 
-    // Hapus user
+    // Hapus user berdasarkan ID
     public function deleteById(int $id): void
     {
         $sql = "DELETE FROM users WHERE id_user = :id";
@@ -58,19 +59,40 @@ final class UserRepository
         $stmt->execute([':id' => $id]);
     }
 
-    // LOGIN (PAKAI password_verify)
+    // Update password user (opsional)
+    public function updatePassword(int $id, string $newPassword): void
+    {
+        $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+        $sql = "UPDATE users SET password = :password WHERE id_user = :id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':password' => $hash, ':id' => $id]);
+    }
+
+    // Update role user (opsional)
+    public function updateRole(int $id, string $role): void
+    {
+        $role = strtoupper(trim($role));
+        if (!in_array($role, ['ADMIN', 'CASHIER'], true)) {
+            throw new InvalidArgumentException('Role tidak valid');
+        }
+        $sql = "UPDATE users SET role = :role WHERE id_user = :id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':role' => $role, ':id' => $id]);
+    }
+
+    // Login / verifikasi username & password
     public function verifyLogin(string $username, string $plainPassword): ?array
     {
         $user = $this->findByUsername($username);
         if (!$user) return null;
 
-        // ✅ COCOKKAN HASH
+        
         if (!password_verify($plainPassword, $user['password'])) {
             return null;
         }
 
         return [
-               'id_user'  => (int)$user['id_user'],
+            'id_user'  => (int)$user['id_user'],
             'username' => $user['username'],
             'role'     => $user['role'],
         ];
